@@ -1,236 +1,40 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Training Tracker v4</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        .container { max-width: 600px; width: 100%; }
-        h1, h2 { color: var(--main); text-align: center; margin-top: 5px; }
-        .last-session { font-size: 0.9rem; color: #ffde7d; text-align: center; margin-bottom: 10px; font-weight: bold; }
-        .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .exercise-block { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 10px; }
-        
-        /* Spinner Styles */
-        .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-        .set-label { font-size: 0.8rem; color: #888; width: 45px; }
-        .input-group { display: flex; align-items: center; gap: 5px; background: #333; border-radius: 8px; padding: 2px; }
-        .input-group button { background: #444; width: 35px; height: 35px; padding: 0; font-size: 1.2rem; border-radius: 5px; }
-        .input-group input { background: transparent; border: none; width: 45px; color: white; text-align: center; font-size: 1rem; font-weight: bold; }
-        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+// --- VERBESSERTE AUDIO LOGIK ---
+let audioCtx = null;
 
-        button { cursor: pointer; background: var(--main); border: none; color: white; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
-        .timer-box { position: sticky; top: 5px; z-index: 100; text-align: center; background: #222; border: 2px solid var(--main); }
-        .timer-display { font-size: 2.2rem; font-weight: bold; color: #ffde7d; }
-        .nav-btns { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
-        #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; padding: 20px 10px; }
-        .modal-content { background: #222; margin: auto; padding: 20px; width: 95%; max-width: 500px; border-radius: 15px; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <div id="last-session-info" class="last-session">Lade letzte Sitzung...</div>
-
-    <div class="card timer-box">
-        <div id="timer-display" class="timer-display">00:00</div>
-        <div style="display:flex; gap:5px; justify-content: center;">
-            <button onclick="startTimer(30)">30s</button>
-            <button onclick="startTimer(60)">60s</button>
-            <button onclick="startTimer(90)">90s</button>
-            <button style="background:#555" onclick="stopTimer()">Rst</button>
-        </div>
-    </div>
-
-    <div class="nav-btns">
-        <button id="toggle-plan-btn" onclick="togglePlan()">Zu Plan B</button>
-        <button style="background:#393e46" onclick="showView('train')">Training</button>
-        <button style="background:#393e46" onclick="showView('edit')">Editor</button>
-    </div>
-
-    <div id="view-train">
-        <h2 id="plan-title">Training A</h2>
-        <div id="exercise-list" class="card"></div>
-        <button style="width:100%; height: 60px; background:#28a745; font-size: 1.1rem;" onclick="saveStats()">FORTSCHRITT SPEICHERN</button>
-    </div>
-
-    <div id="view-edit" style="display:none;">
-        <h2>Editor</h2>
-        <div class="card">
-            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white;">
-                <option value="A">Plan A</option>
-                <option value="B">Plan B</option>
-            </select>
-            <div id="editor-list" style="margin-top:15px;"></div>
-            <input type="text" id="new-ex-name" placeholder="Neue Übung..." style="width:60%; margin-top:10px; padding:10px; background:#333; color:white; border-radius:5px; border:none;">
-            <button onclick="addExercise()">Hinzufügen</button>
-        </div>
-    </div>
-</div>
-
-<div id="chart-modal">
-    <div class="modal-content">
-        <h2 id="modal-title" style="margin-top:0;">Übung</h2>
-        <canvas id="weightChart"></canvas>
-        <canvas id="repsChart" style="margin-top:20px;"></canvas>
-        <button onclick="closeModal()" style="width:100%; background:#ff4b2b; margin-top:20px;">Schließen</button>
-    </div>
-</div>
-
-<script>
-    let audioCtx = null;
-    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
-    function beep(freq, duration, vol = 0.2) {
-        initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.frequency.value = freq; gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-        osc.start(); osc.stop(audioCtx.currentTime + (duration/1000));
+function initAudio() {
+    // Erstellt den Audio-Kontext erst bei einem echten Klick
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-
-    let currentPlan = 'A';
-    let plans = JSON.parse(localStorage.getItem('myPlans')) || {
-        'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
-        'B': ["Kreuzheben", "Schulterdrücken", "Australian Pullups", "Ausfallschritte", "Liegestütze Ringe"]
-    };
-
-    function updateLastSessionDisplay() {
-        const last = JSON.parse(localStorage.getItem('lastSessionLog'));
-        const info = document.getElementById('last-session-info');
-        if (last) {
-            info.innerText = `Zuletzt gespeichert: ${last.date} (Plan ${last.plan})`;
-        } else {
-            info.innerText = "Noch kein Training gespeichert";
-        }
+    // Falls der Browser den Ton "schlafen" gelegt hat (Suspended), wecken wir ihn auf
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
+}
 
-    function showView(view) {
-        document.getElementById('view-train').style.display = view === 'train' ? 'block' : 'none';
-        document.getElementById('view-edit').style.display = view === 'edit' ? 'block' : 'none';
-        if(view === 'train') renderExercises(); else renderEditor();
-    }
-
-    function changeVal(id, delta) {
-        const input = document.getElementById(id);
-        let val = parseFloat(input.value) || 0;
-        val = Math.max(0, val + delta);
-        input.value = val;
-        // Trigger sync if it's the first set kg
-        if(id.includes('kg') && id.endsWith('-1')) {
-            const exName = id.replace('kg-', '').replace('-1', '');
-            syncWeight(exName, 1);
-        }
-    }
-
-    function renderExercises() {
-        const list = document.getElementById('exercise-list');
-        list.innerHTML = '';
-        document.getElementById('plan-title').innerText = `Training ${currentPlan}`;
-        
-        plans[currentPlan].forEach(ex => {
-            const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['0','0'], s2:['0','0'], s3:['0','0'] };
-            let html = `<div class="exercise-block">
-                <span class="ex-title" onclick="openStats('${ex}')">${ex}</span>`;
-            
-            for(let i=1; i<=3; i++) {
-                const sData = data[`s${i}`] || ['0','0'];
-                html += `
-                    <div class="set-row">
-                        <span class="set-label">Satz ${i}</span>
-                        <div class="input-group">
-                            <button onclick="changeVal('kg-${ex}-${i}', -2.5)">-</button>
-                            <input type="number" id="kg-${ex}-${i}" value="${sData[0]}" step="0.5">
-                            <button onclick="changeVal('kg-${ex}-${i}', 2.5)">+</button>
-                        </div>
-                        <div class="input-group">
-                            <button onclick="changeVal('reps-${ex}-${i}', -1)">-</button>
-                            <input type="number" id="reps-${ex}-${i}" value="${sData[1]}">
-                            <button onclick="changeVal('reps-${ex}-${i}', 1)">+</button>
-                        </div>
-                    </div>`;
-            }
-            list.innerHTML += html + `</div>`;
-        });
-    }
-
-    function syncWeight(ex, setNum) {
-        if (setNum === 1) {
-            const val = document.getElementById(`kg-${ex}-1`).value;
-            document.getElementById(`kg-${ex}-2`).value = val;
-            document.getElementById(`kg-${ex}-3`).value = val;
-        }
-    }
-
-    function saveStats() {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-        
-        plans[currentPlan].forEach(ex => {
-            let exerciseData = { date: dateStr, s1:[], s2:[], s3:[] };
-            for(let i=1; i<=3; i++) {
-                exerciseData[`s${i}`] = [document.getElementById(`kg-${ex}-${i}`).value, document.getElementById(`reps-${ex}-${i}`).value];
-            }
-            localStorage.setItem('stats-'+ex, JSON.stringify(exerciseData));
-            let history = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            history.push(exerciseData);
-            localStorage.setItem('hist-'+ex, JSON.stringify(history));
-        });
-
-        localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlan }));
-        updateLastSessionDisplay();
-        beep(800, 200);
-        alert('Training gespeichert!');
-    }
-
-    let weightChart, repsChart;
-    function openStats(ex) {
-        document.getElementById('chart-modal').style.display = 'block';
-        document.getElementById('modal-title').innerText = ex;
-        const history = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-        const labels = history.slice(-10).map(h => h.date.split(',')[1] || h.date);
-        const avgWeights = history.slice(-10).map(h => ((parseFloat(h.s1[0])||0)+(parseFloat(h.s2[0])||0)+(parseFloat(h.s3[0])||0))/3);
-        const totalReps = history.slice(-10).map(h => (parseInt(h.s1[1])||0)+(parseInt(h.s2[1])||0)+(parseInt(h.s3[1])||0));
-
-        if(weightChart) weightChart.destroy();
-        if(repsChart) repsChart.destroy();
-        weightChart = new Chart(document.getElementById('weightChart'), { type: 'line', data: { labels, datasets: [{ label: 'kg (Schnitt)', data: avgWeights, borderColor: '#00adb5' }] }, options: { color: 'white' } });
-        repsChart = new Chart(document.getElementById('repsChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Wdh (Total)', data: totalReps, backgroundColor: '#ffde7d' }] }, options: { color: 'white' } });
-    }
-
-    function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
-
-    let timerInterval;
-    function startTimer(seconds) {
-        initAudio(); clearInterval(timerInterval); beep(500, 100);
-        let timeLeft = seconds;
-        const display = document.getElementById('timer-display');
-        timerInterval = setInterval(() => {
-            let m = Math.floor(timeLeft / 60); let s = timeLeft % 60;
-            display.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-            if (timeLeft <= 3 && timeLeft > 0) beep(600, 200);
-            if (timeLeft === 0) { clearInterval(timerInterval); display.innerText = "GO!"; beep(900, 1000, 0.4); }
-            timeLeft--;
-        }, 1000);
-    }
-    function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
-    function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; renderExercises(); }
+function beep(freq, duration, vol = 0.3) {
+    initAudio(); // Stellt sicher, dass Audio aktiv ist
     
-    function renderEditor() {
-        const p = document.getElementById('edit-plan-select').value;
-        const list = document.getElementById('editor-list'); list.innerHTML = '';
-        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${ex}</span><button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">X</button></div>`; });
-    }
-    function addExercise() {
-        const p = document.getElementById('edit-plan-select').value; const name = document.getElementById('new-ex-name').value;
-        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
-    }
-    function deleteEx(p, i) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.frequency.value = freq;
+    // Sanftes Ein- und Ausblenden verhindert Knackgeräusche
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.01);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + (duration / 1000));
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + (duration / 1000));
+}
 
-    updateLastSessionDisplay();
-    renderExercises();
-</script>
-</body>
-</html>
+// In der startTimer Funktion muss initAudio ganz oben stehen:
+function startTimer(seconds) {
+    initAudio(); // WICHTIG: Aktiviert den Sound-Kanal sofort beim Drücken der 30s/60s/90s Taste
+    clearInterval(timerInterval);
+    beep(500, 100); // Bestätigungs-Piep
+    // ... restliche Timer Logik
+}
