@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v9</title>
+    <title>Training Pro Tracker v10</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -18,7 +18,6 @@
         .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .set-label { font-size: 0.8rem; color: #888; width: 45px; }
         
-        /* Spinner & Labels */
         .input-wrapper { display: flex; flex-direction: column; align-items: center; gap: 2px; }
         .input-hint { font-size: 0.65rem; color: var(--main); font-weight: bold; text-transform: uppercase; }
         .input-group { display: flex; align-items: center; gap: 5px; background: #333; border-radius: 8px; padding: 2px; }
@@ -38,6 +37,9 @@
         
         #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; padding: 20px 10px; }
         .modal-content { background: #222; margin: auto; padding: 20px; width: 95%; max-width: 500px; border-radius: 15px; }
+        
+        .plan-selector-row { display: flex; gap: 5px; margin-bottom: 15px; }
+        .plan-selector-row select { flex: 1; padding: 10px; background: #333; color: white; border-radius: 5px; border: none; }
     </style>
 </head>
 <body>
@@ -56,24 +58,25 @@
     </div>
 
     <div class="nav-btns">
-        <button id="toggle-plan-btn" onclick="togglePlan()">Zu Plan B</button>
+        <button id="toggle-plan-btn" onclick="nextPlan()">Nächster Plan</button>
         <button style="background:#393e46" onclick="showView('train')">Training</button>
         <button style="background:#393e46" onclick="showView('edit')">Editor</button>
     </div>
 
     <div id="view-train">
-        <h2 id="plan-title">Training A</h2>
+        <h2 id="plan-title">Training</h2>
         <div id="exercise-list" class="card"></div>
         <button style="width:100%; height: 60px; background:#28a745; font-size: 1.1rem;" onclick="saveStats()">FORTSCHRITT SPEICHERN</button>
     </div>
 
     <div id="view-edit" style="display:none;">
-        <h2>Reihenfolge & Übungen</h2>
+        <h2>Pläne verwalten</h2>
         <div class="card">
-            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white; border-radius:5px; margin-bottom:15px; border:none;">
-                <option value="A">Plan A bearbeiten</option>
-                <option value="B">Plan B bearbeiten</option>
-            </select>
+            <div class="plan-selector-row">
+                <select id="edit-plan-select" onchange="renderEditor()"></select>
+                <button onclick="addNewPlan()" style="background:#28a745">+</button>
+                <button onclick="deleteCurrentPlan()" style="background:#ff4b2b">X</button>
+            </div>
             <div id="editor-list"></div>
             <hr style="border: 1px solid #333; margin: 15px 0;">
             <div style="display:flex; gap:5px;">
@@ -102,11 +105,11 @@
         else { longBeep.currentTime = 0; longBeep.play().catch(e => {}); }
     }
 
-    let currentPlan = 'A';
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
-        'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
-        'B': ["Kreuzheben", "Schulterdrücken", "Australian Pullups", "Ausfallschritte", "Liegestütze Ringe"]
+        'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH"],
+        'B': ["Kreuzheben", "Schulterdrücken", "Ausfallschritte"]
     };
+    let currentPlanKey = Object.keys(plans)[0];
 
     function updateLastSessionDisplay() {
         const last = JSON.parse(localStorage.getItem('lastSessionLog'));
@@ -127,7 +130,8 @@
         input.value = val;
         
         if(id.includes('kg') && id.endsWith('-1')) {
-            const exName = id.split('kg-')[1].split('-1')[0];
+            const parts = id.split('-');
+            const exName = parts.slice(1, -1).join('-');
             const val2 = document.getElementById(`kg-${exName}-2`);
             const val3 = document.getElementById(`kg-${exName}-3`);
             if(val2) val2.value = val;
@@ -138,11 +142,12 @@
     function renderExercises() {
         const list = document.getElementById('exercise-list');
         list.innerHTML = '';
-        document.getElementById('plan-title').innerText = `Training ${currentPlan}`;
-        plans[currentPlan].forEach(ex => {
+        document.getElementById('plan-title').innerText = `Training ${currentPlanKey}`;
+        document.getElementById('toggle-plan-btn').innerText = `Plan ${currentPlanKey} active`;
+        
+        plans[currentPlanKey].forEach(ex => {
             const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['0','0'], s2:['0','0'], s3:['0','0'] };
             let html = `<div class="exercise-block"><span class="ex-title" onclick="openStats('${ex}')">${ex}</span>`;
-            
             for(let i=1; i<=3; i++) {
                 const sData = data[`s${i}`] || ['0','0'];
                 html += `
@@ -171,20 +176,59 @@
     }
 
     function renderEditor() {
-        const p = document.getElementById('edit-plan-select').value;
-        const list = document.getElementById('editor-list'); 
-        list.innerHTML = '';
-        plans[p].forEach((ex, i) => {
-            list.innerHTML += `
-                <div class="edit-row">
-                    <span style="flex:1;">${ex}</span>
-                    <div class="order-btns">
-                        <button onclick="moveEx('${p}', ${i}, -1)">↑</button>
-                        <button onclick="moveEx('${p}', ${i}, 1)">↓</button>
-                        <button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">X</button>
-                    </div>
-                </div>`;
+        const select = document.getElementById('edit-plan-select');
+        const list = document.getElementById('editor-list');
+        
+        // Dropdown füllen
+        const planKeys = Object.keys(plans);
+        select.innerHTML = '';
+        planKeys.forEach(k => {
+            const opt = document.createElement('option');
+            opt.value = k; opt.innerText = `Plan ${k}`;
+            if(k === currentPlanKey) opt.selected = true;
+            select.appendChild(opt);
         });
+
+        const activeEditKey = select.value || currentPlanKey;
+        list.innerHTML = '';
+        if(plans[activeEditKey]) {
+            plans[activeEditKey].forEach((ex, i) => {
+                list.innerHTML += `
+                    <div class="edit-row">
+                        <span style="flex:1;">${ex}</span>
+                        <div class="order-btns">
+                            <button onclick="moveEx('${activeEditKey}', ${i}, -1)">↑</button>
+                            <button onclick="moveEx('${activeEditKey}', ${i}, 1)">↓</button>
+                            <button style="background:#ff4b2b" onclick="deleteEx('${activeEditKey}', ${i})">X</button>
+                        </div>
+                    </div>`;
+            });
+        }
+    }
+
+    function addNewPlan() {
+        const name = prompt("Wie soll der neue Plan heißen? (z.B. C)");
+        if(name && !plans[name]) {
+            plans[name] = [];
+            currentPlanKey = name;
+            localStorage.setItem('myPlans', JSON.stringify(plans));
+            renderEditor();
+        } else if(plans[name]) {
+            alert("Dieser Plan existiert bereits!");
+        }
+    }
+
+    function deleteCurrentPlan() {
+        const select = document.getElementById('edit-plan-select');
+        const key = select.value;
+        if(Object.keys(plans).length <= 1) return alert("Du musst mindestens einen Plan behalten!");
+        if(confirm(`Möchtest du Plan ${key} wirklich löschen?`)) {
+            delete plans[key];
+            currentPlanKey = Object.keys(plans)[0];
+            localStorage.setItem('myPlans', JSON.stringify(plans));
+            renderEditor();
+            renderExercises();
+        }
     }
 
     function moveEx(planKey, index, dir) {
@@ -201,35 +245,51 @@
     function addExercise() {
         const p = document.getElementById('edit-plan-select').value;
         const name = document.getElementById('new-ex-name').value;
-        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); document.getElementById('new-ex-name').value=''; renderEditor(); }
+        if(name && p) {
+            plans[p].push(name);
+            localStorage.setItem('myPlans', JSON.stringify(plans));
+            document.getElementById('new-ex-name').value='';
+            renderEditor();
+        }
     }
 
-    function deleteEx(p, i) { 
-        if(confirm('Übung löschen?')) { 
-            plans[p].splice(i, 1); 
-            localStorage.setItem('myPlans', JSON.stringify(plans)); 
-            renderEditor(); 
-        } 
+    function deleteEx(p, i) {
+        if(confirm('Übung löschen?')) {
+            plans[p].splice(i, 1);
+            localStorage.setItem('myPlans', JSON.stringify(plans));
+            renderEditor();
+        }
+    }
+
+    function nextPlan() {
+        const keys = Object.keys(plans);
+        let idx = keys.indexOf(currentPlanKey);
+        idx = (idx + 1) % keys.length;
+        currentPlanKey = keys[idx];
+        renderExercises();
+        playSound('short');
     }
 
     function saveStats() {
         const now = new Date();
         const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-        plans[currentPlan].forEach(ex => {
+        plans[currentPlanKey].forEach(ex => {
             let exData = { date: dateStr, s1:[], s2:[], s3:[] };
-            for(let i=1; i<=3; i++) { 
-                const kg = document.getElementById(`kg-${ex}-${i}`).value;
-                const reps = document.getElementById(`reps-${ex}-${i}`).value;
-                exData[`s${i}`] = [kg, reps]; 
+            for(let i=1; i<=3; i++) {
+                const kgInput = document.getElementById(`kg-${ex}-${i}`);
+                const repsInput = document.getElementById(`reps-${ex}-${i}`);
+                if(kgInput && repsInput) {
+                    exData[`s${i}`] = [kgInput.value, repsInput.value];
+                }
             }
             localStorage.setItem('stats-'+ex, JSON.stringify(exData));
             let hist = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            hist.push(exData); 
+            hist.push(exData);
             localStorage.setItem('hist-'+ex, JSON.stringify(hist));
         });
-        localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlan }));
-        updateLastSessionDisplay(); 
-        playSound('short'); 
+        localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlanKey }));
+        updateLastSessionDisplay();
+        playSound('short');
         alert('Training gespeichert!');
     }
 
@@ -246,14 +306,7 @@
             timeLeft--;
         }, 1000);
     }
-
     function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
-    
-    function togglePlan() { 
-        currentPlan = currentPlan === 'A' ? 'B' : 'A'; 
-        document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; 
-        renderExercises(); 
-    }
 
     let wChart, rChart;
     function openStats(ex) {
@@ -267,7 +320,6 @@
         wChart = new Chart(document.getElementById('weightChart'), { type: 'line', data: { labels, datasets: [{ label: 'Ø kg', data: weights, borderColor: '#00adb5' }] }, options: { color: 'white' } });
         rChart = new Chart(document.getElementById('repsChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Wdh Total', data: reps, backgroundColor: '#ffde7d' }] }, options: { color: 'white' } });
     }
-    
     function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
     updateLastSessionDisplay();
