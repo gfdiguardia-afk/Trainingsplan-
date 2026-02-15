@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v6</title>
+    <title>Training Pro Tracker v7</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -12,17 +12,27 @@
         h1, h2 { color: var(--main); text-align: center; margin-top: 5px; }
         .last-session { font-size: 0.9rem; color: #ffde7d; text-align: center; margin-bottom: 10px; font-weight: bold; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        
+        /* Trainings-Ansicht */
         .exercise-block { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
         .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 10px; }
-        
         .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
         .set-label { font-size: 0.8rem; color: #888; width: 45px; }
+        
+        /* Spinner & Inputs */
         .input-group { display: flex; align-items: center; gap: 5px; background: #333; border-radius: 8px; padding: 2px; }
-        .input-group button { background: #444; width: 38px; height: 38px; padding: 0; font-size: 1.2rem; border-radius: 5px; color: white; border: none; cursor: pointer; }
-        .input-group input { background: transparent; border: none; width: 45px; color: white; text-align: center; font-size: 1rem; font-weight: bold; }
+        .input-group button { background: #444; width: 40px; height: 40px; padding: 0; font-size: 1.2rem; border-radius: 5px; color: white; border: none; cursor: pointer; }
+        .input-group input { background: transparent; border: none; width: 50px; color: white; text-align: center; font-size: 1rem; font-weight: bold; }
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
         button { cursor: pointer; background: var(--main); border: none; color: white; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
+        
+        /* Editor-Reihenfolge */
+        .edit-row { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+        .order-btns { display: flex; gap: 4px; }
+        .order-btns button { padding: 8px 12px; background: #444; font-size: 1.1rem; }
+
+        /* Navigation & Timer */
         .timer-box { position: sticky; top: 5px; z-index: 100; text-align: center; background: #222; border: 2px solid var(--main); }
         .timer-display { font-size: 2.2rem; font-weight: bold; color: #ffde7d; }
         .nav-btns { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
@@ -59,15 +69,18 @@
     </div>
 
     <div id="view-edit" style="display:none;">
-        <h2>Editor</h2>
+        <h2>Reihenfolge & Übungen</h2>
         <div class="card">
-            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white; border-radius:5px; border:none;">
+            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white; border-radius:5px; margin-bottom:15px; border:none;">
                 <option value="A">Plan A bearbeiten</option>
                 <option value="B">Plan B bearbeiten</option>
             </select>
-            <div id="editor-list" style="margin-top:15px;"></div>
-            <input type="text" id="new-ex-name" placeholder="Name der Übung..." style="width:65%; margin-top:10px; padding:10px; background:#333; color:white; border-radius:5px; border:none;">
-            <button onclick="addExercise()">+</button>
+            <div id="editor-list"></div>
+            <hr style="border: 1px solid #333; margin: 15px 0;">
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="new-ex-name" placeholder="Neue Übung..." style="flex:1; padding:12px; background:#333; color:white; border-radius:5px; border:none;">
+                <button onclick="addExercise()" style="background:#28a745">+</button>
+            </div>
         </div>
     </div>
 </div>
@@ -82,21 +95,16 @@
 </div>
 
 <script>
-    // --- MP3 AUDIO LOGIK ---
-    // Diese URLs führen zu Standard-Sounddateien
+    // --- AUDIO ---
     const shortBeep = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
     const longBeep = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock_short_beep.ogg");
 
     function playSound(type) {
-        if (type === 'short') {
-            shortBeep.currentTime = 0;
-            shortBeep.play().catch(e => console.log("Audio-Interaktion nötig"));
-        } else {
-            longBeep.currentTime = 0;
-            longBeep.play().catch(e => console.log("Audio-Interaktion nötig"));
-        }
+        if (type === 'short') { shortBeep.currentTime = 0; shortBeep.play().catch(e => {}); }
+        else { longBeep.currentTime = 0; longBeep.play().catch(e => {}); }
     }
 
+    // --- DATEN ---
     let currentPlan = 'A';
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
         'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
@@ -106,11 +114,7 @@
     function updateLastSessionDisplay() {
         const last = JSON.parse(localStorage.getItem('lastSessionLog'));
         const info = document.getElementById('last-session-info');
-        if (last) {
-            info.innerText = `Letztes Training: ${last.date} (Plan ${last.plan})`;
-        } else {
-            info.innerText = "Noch kein Training gespeichert";
-        }
+        info.innerText = last ? `Letztes Training: ${last.date} (Plan ${last.plan})` : "Noch kein Training gespeichert";
     }
 
     function showView(view) {
@@ -119,6 +123,7 @@
         if(view === 'train') renderExercises(); else renderEditor();
     }
 
+    // --- SPINNER & SYNC ---
     function changeVal(id, delta) {
         const input = document.getElementById(id);
         let val = parseFloat(input.value) || 0;
@@ -148,6 +153,43 @@
         });
     }
 
+    // --- VERSCHIEBEN & EDITOR ---
+    function renderEditor() {
+        const p = document.getElementById('edit-plan-select').value;
+        const list = document.getElementById('editor-list'); list.innerHTML = '';
+        plans[p].forEach((ex, i) => {
+            list.innerHTML += `
+                <div class="edit-row">
+                    <span style="flex:1;">${ex}</span>
+                    <div class="order-btns">
+                        <button onclick="moveEx('${p}', ${i}, -1)">↑</button>
+                        <button onclick="moveEx('${p}', ${i}, 1)">↓</button>
+                        <button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">X</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function moveEx(planKey, index, dir) {
+        const newIndex = index + dir;
+        if (newIndex >= 0 && newIndex < plans[planKey].length) {
+            const temp = plans[planKey][index];
+            plans[planKey][index] = plans[planKey][newIndex];
+            plans[planKey][newIndex] = temp;
+            localStorage.setItem('myPlans', JSON.stringify(plans));
+            renderEditor();
+        }
+    }
+
+    function addExercise() {
+        const p = document.getElementById('edit-plan-select').value;
+        const name = document.getElementById('new-ex-name').value;
+        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); document.getElementById('new-ex-name').value=''; renderEditor(); }
+    }
+
+    function deleteEx(p, i) { if(confirm('Übung löschen?')) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); } }
+
+    // --- SPEICHERN & TIMER ---
     function saveStats() {
         const now = new Date();
         const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -159,14 +201,12 @@
             hist.push(exData); localStorage.setItem('hist-'+ex, JSON.stringify(hist));
         });
         localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlan }));
-        updateLastSessionDisplay();
-        playSound('short'); alert('Training gespeichert!');
+        updateLastSessionDisplay(); playSound('short'); alert('Training gespeichert!');
     }
 
     let timerInterval;
     function startTimer(seconds) {
-        clearInterval(timerInterval);
-        playSound('short');
+        clearInterval(timerInterval); playSound('short');
         let timeLeft = seconds;
         const display = document.getElementById('timer-display');
         timerInterval = setInterval(() => {
@@ -177,24 +217,10 @@
             timeLeft--;
         }, 1000);
     }
-
     function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
     function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; renderExercises(); }
-    function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
-    
-    // Editor Logik
-    function renderEditor() {
-        const p = document.getElementById('edit-plan-select').value;
-        const list = document.getElementById('editor-list'); list.innerHTML = '';
-        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${ex}</span><button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">X</button></div>`; });
-    }
-    function addExercise() {
-        const p = document.getElementById('edit-plan-select').value; const name = document.getElementById('new-ex-name').value;
-        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
-    }
-    function deleteEx(p, i) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
 
-    // Chart Logik
+    // --- CHARTS ---
     let wChart, rChart;
     function openStats(ex) {
         document.getElementById('chart-modal').style.display = 'block';
@@ -207,6 +233,7 @@
         wChart = new Chart(document.getElementById('weightChart'), { type: 'line', data: { labels, datasets: [{ label: 'Ø kg', data: weights, borderColor: '#00adb5' }] }, options: { color: 'white' } });
         rChart = new Chart(document.getElementById('repsChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Wdh Total', data: reps, backgroundColor: '#ffde7d' }] }, options: { color: 'white' } });
     }
+    function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
     updateLastSessionDisplay();
     renderExercises();
