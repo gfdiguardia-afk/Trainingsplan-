@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v10</title>
+    <title>Training Pro Tracker v11</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -143,7 +143,11 @@
         const list = document.getElementById('exercise-list');
         list.innerHTML = '';
         document.getElementById('plan-title').innerText = `Training ${currentPlanKey}`;
-        document.getElementById('toggle-plan-btn').innerText = `Plan ${currentPlanKey} active`;
+        
+        // Button Beschriftung für den nächsten Plan aktualisieren
+        const keys = Object.keys(plans);
+        let nextIdx = (keys.indexOf(currentPlanKey) + 1) % keys.length;
+        document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${keys[nextIdx]}`;
         
         plans[currentPlanKey].forEach(ex => {
             const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['0','0'], s2:['0','0'], s3:['0','0'] };
@@ -178,8 +182,6 @@
     function renderEditor() {
         const select = document.getElementById('edit-plan-select');
         const list = document.getElementById('editor-list');
-        
-        // Dropdown füllen
         const planKeys = Object.keys(plans);
         select.innerHTML = '';
         planKeys.forEach(k => {
@@ -207,22 +209,20 @@
     }
 
     function addNewPlan() {
-        const name = prompt("Wie soll der neue Plan heißen? (z.B. C)");
+        const name = prompt("Name des neuen Plans (z.B. C):");
         if(name && !plans[name]) {
             plans[name] = [];
             currentPlanKey = name;
             localStorage.setItem('myPlans', JSON.stringify(plans));
             renderEditor();
-        } else if(plans[name]) {
-            alert("Dieser Plan existiert bereits!");
-        }
+            renderExercises();
+        } else if(plans[name]) { alert("Existiert bereits!"); }
     }
 
     function deleteCurrentPlan() {
-        const select = document.getElementById('edit-plan-select');
-        const key = select.value;
-        if(Object.keys(plans).length <= 1) return alert("Du musst mindestens einen Plan behalten!");
-        if(confirm(`Möchtest du Plan ${key} wirklich löschen?`)) {
+        const key = document.getElementById('edit-plan-select').value;
+        if(Object.keys(plans).length <= 1) return alert("Ein Plan muss bleiben!");
+        if(confirm(`Plan ${key} löschen?`)) {
             delete plans[key];
             currentPlanKey = Object.keys(plans)[0];
             localStorage.setItem('myPlans', JSON.stringify(plans));
@@ -267,7 +267,7 @@
         idx = (idx + 1) % keys.length;
         currentPlanKey = keys[idx];
         renderExercises();
-        playSound('short');
+        // Piepston hier entfernt!
     }
 
     function saveStats() {
@@ -276,11 +276,9 @@
         plans[currentPlanKey].forEach(ex => {
             let exData = { date: dateStr, s1:[], s2:[], s3:[] };
             for(let i=1; i<=3; i++) {
-                const kgInput = document.getElementById(`kg-${ex}-${i}`);
-                const repsInput = document.getElementById(`reps-${ex}-${i}`);
-                if(kgInput && repsInput) {
-                    exData[`s${i}`] = [kgInput.value, repsInput.value];
-                }
+                const kgVal = document.getElementById(`kg-${ex}-${i}`).value;
+                const repsVal = document.getElementById(`reps-${ex}-${i}`).value;
+                exData[`s${i}`] = [kgVal, repsVal];
             }
             localStorage.setItem('stats-'+ex, JSON.stringify(exData));
             let hist = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
@@ -289,7 +287,7 @@
         });
         localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlanKey }));
         updateLastSessionDisplay();
-        playSound('short');
+        playSound('short'); // Bestätigung beim Speichern bleibt
         alert('Training gespeichert!');
     }
 
