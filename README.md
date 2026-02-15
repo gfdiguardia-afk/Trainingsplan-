@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Training Tracker</title>
+    <title>Ultimate Training Tracker v3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -12,19 +12,16 @@
         h1, h2 { color: var(--main); text-align: center; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .exercise-block { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 8px; }
-        .set-row { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 10px; }
+        .set-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
         .set-label { width: 60px; font-size: 0.9rem; color: #888; }
-        input { background: #333; border: 1px solid #444; color: white; padding: 8px; border-radius: 5px; width: 60px; text-align: center; font-size: 1rem; }
+        input { background: #333; border: 1px solid #444; color: white; padding: 8px; border-radius: 5px; width: 65px; text-align: center; font-size: 1rem; }
         button { cursor: pointer; background: var(--main); border: none; color: white; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
         .timer-box { position: sticky; top: 5px; z-index: 100; text-align: center; background: #222; border: 2px solid var(--main); }
-        .timer-display { font-size: 2rem; font-weight: bold; color: #ffde7d; }
+        .timer-display { font-size: 2.2rem; font-weight: bold; color: #ffde7d; }
         .nav-btns { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
-        
-        /* Modal für Charts */
-        #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; overflow-y: auto; padding-top: 20px; }
-        .modal-content { background: #222; margin: auto; padding: 20px; width: 90%; max-width: 500px; border-radius: 15px; }
-        canvas { margin-bottom: 30px; }
+        #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; overflow-y: auto; padding: 20px 10px; }
+        .modal-content { background: #222; margin: auto; padding: 20px; width: 95%; max-width: 500px; border-radius: 15px; }
     </style>
 </head>
 <body>
@@ -38,10 +35,11 @@
             <button onclick="startTimer(90)">90s</button>
             <button style="background:#555" onclick="stopTimer()">Rst</button>
         </div>
+        <p id="audio-status" style="font-size: 0.7rem; color: #555; margin-top: 5px;">Audio bereit</p>
     </div>
 
     <div class="nav-btns">
-        <button id="toggle-plan-btn" onclick="togglePlan()">Wechsel zu B</button>
+        <button id="toggle-plan-btn" onclick="togglePlan()">Zu Plan B</button>
         <button style="background:#393e46" onclick="showView('train')">Training</button>
         <button style="background:#393e46" onclick="showView('edit')">Editor</button>
     </div>
@@ -49,42 +47,56 @@
     <div id="view-train">
         <h2 id="plan-title">Training A</h2>
         <div id="exercise-list" class="card"></div>
-        <button style="width:100%; height: 50px; background:#28a745" onclick="saveStats()">FORTSCHRITT SPEICHERN</button>
+        <button style="width:100%; height: 60px; background:#28a745; font-size: 1.1rem;" onclick="saveStats()">FORTSCHRITT SPEICHERN</button>
     </div>
 
     <div id="view-edit" style="display:none;">
         <h2>Editor</h2>
         <div class="card">
-            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white; border-radius:5px;">
+            <select id="edit-plan-select" onchange="renderEditor()" style="width:100%; padding:10px; background:#333; color:white;">
                 <option value="A">Plan A</option>
                 <option value="B">Plan B</option>
             </select>
-            <div id="editor-list" style="margin-top:10px;"></div>
-            <input type="text" id="new-ex-name" placeholder="Name..." style="width:60%; margin-top:10px;">
-            <button onclick="addExercise()">+</button>
+            <div id="editor-list" style="margin-top:15px;"></div>
+            <input type="text" id="new-ex-name" placeholder="Neue Übung..." style="width:60%; margin-top:10px;">
+            <button onclick="addExercise()">Hinzufügen</button>
         </div>
     </div>
 </div>
 
 <div id="chart-modal">
     <div class="modal-content">
-        <h2 id="modal-title">Übung</h2>
+        <h2 id="modal-title" style="margin-top:0;">Übung</h2>
         <canvas id="weightChart"></canvas>
-        <canvas id="repsChart"></canvas>
-        <button onclick="closeModal()" style="width:100%; background:#ff4b2b">Schließen</button>
+        <canvas id="repsChart" style="margin-top:20px;"></canvas>
+        <button onclick="closeModal()" style="width:100%; background:#ff4b2b; margin-top:20px;">Schließen</button>
     </div>
 </div>
 
 <script>
+    // --- AUDIO LOGIK (Verbessert) ---
     let audioCtx = null;
-    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    function beep(freq, duration, vol = 0.1) {
-        initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.frequency.value = freq; gain.gain.value = vol;
-        osc.start(); setTimeout(() => osc.stop(), duration);
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('audio-status').innerText = "Audio Aktiv";
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
+    function beep(freq, duration, vol = 0.2) {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + (duration/1000));
+    }
+
+    // --- DATEN & PLANS ---
     let currentPlan = 'A';
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
         'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
@@ -106,19 +118,20 @@
             const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['',''], s2:['',''], s3:['',''] };
             let html = `<div class="exercise-block">
                 <span class="ex-title" onclick="openStats('${ex}')">${ex}</span>`;
+            
             for(let i=1; i<=3; i++) {
+                const sData = data[`s${i}`] || ['',''];
                 html += `
                     <div class="set-row">
                         <span class="set-label">Satz ${i}</span>
-                        <input type="number" id="kg-${ex}-${i}" value="${data[`s${i}`][0]}" oninput="syncWeight('${ex}', ${i})" placeholder="kg">
-                        <input type="number" id="reps-${ex}-${i}" value="${data[`s${i}`][1]}" placeholder="reps">
+                        <input type="number" id="kg-${ex}-${i}" value="${sData[0]}" oninput="syncWeight('${ex}', ${i})" placeholder="kg">
+                        <input type="number" id="reps-${ex}-${i}" value="${sData[1]}" placeholder="Wdh">
                     </div>`;
             }
             list.innerHTML += html + `</div>`;
         });
     }
 
-    // Smart Fill Funktion
     function syncWeight(ex, setNum) {
         if (setNum === 1) {
             const val = document.getElementById(`kg-${ex}-1`).value;
@@ -128,9 +141,9 @@
     }
 
     function saveStats() {
-        const date = new Date().toISOString().split('T')[0];
+        const date = new Date().toLocaleDateString('de-DE');
         plans[currentPlan].forEach(ex => {
-            let exerciseData = { date: date };
+            let exerciseData = { date: date, s1:[], s2:[], s3:[] };
             for(let i=1; i<=3; i++) {
                 const kg = document.getElementById(`kg-${ex}-${i}`).value;
                 const reps = document.getElementById(`reps-${ex}-${i}`).value;
@@ -138,17 +151,16 @@
             }
             localStorage.setItem('stats-'+ex, JSON.stringify(exerciseData));
             
-            // Historie für Charts speichern
             let history = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            // Nur speichern, wenn heute noch nicht gespeichert oder Update
             history = history.filter(h => h.date !== date);
             history.push(exerciseData);
             localStorage.setItem('hist-'+ex, JSON.stringify(history));
         });
-        beep(800, 200); alert('Gespeichert!');
+        beep(800, 200);
+        alert('Erfolgreich gespeichert!');
     }
 
-    // CHART LOGIK
+    // --- CHARTS ---
     let weightChart, repsChart;
     function openStats(ex) {
         document.getElementById('chart-modal').style.display = 'block';
@@ -168,43 +180,57 @@
         const ctxW = document.getElementById('weightChart').getContext('2d');
         weightChart = new Chart(ctxW, {
             type: 'line',
-            data: { labels, datasets: [{ label: 'Durchschnitt kg', data: avgWeights, borderColor: '#00adb5', tension: 0.1 }] },
-            options: { plugins: { legend: { labels: { color: 'white' } } } }
+            data: { labels, datasets: [{ label: 'Ø Gewicht (kg)', data: avgWeights, borderColor: '#00adb5', tension: 0.2 }] },
+            options: { color: 'white', scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } } }
         });
 
         const ctxR = document.getElementById('repsChart').getContext('2d');
         repsChart = new Chart(ctxR, {
             type: 'bar',
             data: { labels, datasets: [{ label: 'Total Wiederholungen', data: totalReps, backgroundColor: '#ffde7d' }] },
-            options: { plugins: { legend: { labels: { color: 'white' } } } }
+            options: { color: 'white', scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } } }
         });
     }
 
     function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
-    // Timer & Editor (wie vorher)
+    // --- TIMER ---
     let timerInterval;
     function startTimer(seconds) {
-        initAudio(); clearInterval(timerInterval); beep(600, 100);
+        initAudio(); 
+        clearInterval(timerInterval);
+        beep(500, 100);
         let timeLeft = seconds;
         const display = document.getElementById('timer-display');
+        
         timerInterval = setInterval(() => {
-            display.innerText = `00:${timeLeft.toString().padStart(2, '0')}`;
-            if (timeLeft <= 3 && timeLeft > 0) beep(600, 150);
-            if (timeLeft === 0) { clearInterval(timerInterval); display.innerText = "GO!"; beep(900, 800, 0.3); }
+            let m = Math.floor(timeLeft / 60);
+            let s = timeLeft % 60;
+            display.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            
+            if (timeLeft <= 3 && timeLeft > 0) {
+                beep(600, 200); // Pip Pip Pip
+            } else if (timeLeft === 0) {
+                clearInterval(timerInterval);
+                display.innerText = "GO!";
+                beep(900, 1000, 0.4); // PIIIIIEP
+            }
             timeLeft--;
         }, 1000);
     }
+
     function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
-    function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; renderExercises(); }
+    function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; renderExercises(); }
+    
+    // --- EDITOR ---
     function renderEditor() {
         const p = document.getElementById('edit-plan-select').value;
         const list = document.getElementById('editor-list'); list.innerHTML = '';
-        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${ex}</span><button onclick="deleteEx('${p}', ${i})">X</button></div>`; });
+        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${ex}</span><button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">Löschen</button></div>`; });
     }
     function addExercise() {
         const p = document.getElementById('edit-plan-select').value; const name = document.getElementById('new-ex-name').value;
-        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
+        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); document.getElementById('new-ex-name').value=''; renderEditor(); }
     }
     function deleteEx(p, i) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
 
