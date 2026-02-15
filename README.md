@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v11</title>
+    <title>Training Pro Tracker v12</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -97,12 +97,21 @@
 </div>
 
 <script>
-    const shortBeep = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-    const longBeep = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock_short_beep.ogg");
-
+    // --- OPTIMIERTE AUDIO LOGIK ---
     function playSound(type) {
-        if (type === 'short') { shortBeep.currentTime = 0; shortBeep.play().catch(e => {}); }
-        else { longBeep.currentTime = 0; longBeep.play().catch(e => {}); }
+        const url = type === 'short' 
+            ? "https://actions.google.com/sounds/v1/alarms/beep_short.ogg" 
+            : "https://actions.google.com/sounds/v1/alarms/alarm_clock_short_beep.ogg";
+        
+        const audio = new Audio(url);
+        // Trick: Wir setzen das Volumen minimal runter, das hilft manchmal bei Android
+        audio.volume = 0.9; 
+        audio.play().catch(e => console.log("Audio blockiert: ", e));
+        
+        // Zusätzliche Vibration als Backup (500ms bei Lang, 100ms bei Kurz)
+        if (navigator.vibrate) {
+            navigator.vibrate(type === 'short' ? 100 : [300, 100, 300]);
+        }
     }
 
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
@@ -144,7 +153,6 @@
         list.innerHTML = '';
         document.getElementById('plan-title').innerText = `Training ${currentPlanKey}`;
         
-        // Button Beschriftung für den nächsten Plan aktualisieren
         const keys = Object.keys(plans);
         let nextIdx = (keys.indexOf(currentPlanKey) + 1) % keys.length;
         document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${keys[nextIdx]}`;
@@ -190,7 +198,6 @@
             if(k === currentPlanKey) opt.selected = true;
             select.appendChild(opt);
         });
-
         const activeEditKey = select.value || currentPlanKey;
         list.innerHTML = '';
         if(plans[activeEditKey]) {
@@ -209,36 +216,29 @@
     }
 
     function addNewPlan() {
-        const name = prompt("Name des neuen Plans (z.B. C):");
+        const name = prompt("Name des neuen Plans:");
         if(name && !plans[name]) {
-            plans[name] = [];
-            currentPlanKey = name;
+            plans[name] = []; currentPlanKey = name;
             localStorage.setItem('myPlans', JSON.stringify(plans));
-            renderEditor();
-            renderExercises();
-        } else if(plans[name]) { alert("Existiert bereits!"); }
+            renderEditor(); renderExercises();
+        }
     }
 
     function deleteCurrentPlan() {
         const key = document.getElementById('edit-plan-select').value;
         if(Object.keys(plans).length <= 1) return alert("Ein Plan muss bleiben!");
         if(confirm(`Plan ${key} löschen?`)) {
-            delete plans[key];
-            currentPlanKey = Object.keys(plans)[0];
+            delete plans[key]; currentPlanKey = Object.keys(plans)[0];
             localStorage.setItem('myPlans', JSON.stringify(plans));
-            renderEditor();
-            renderExercises();
+            renderEditor(); renderExercises();
         }
     }
 
-    function moveEx(planKey, index, dir) {
-        const newIndex = index + dir;
-        if (newIndex >= 0 && newIndex < plans[planKey].length) {
-            const temp = plans[planKey][index];
-            plans[planKey][index] = plans[planKey][newIndex];
-            plans[planKey][newIndex] = temp;
-            localStorage.setItem('myPlans', JSON.stringify(plans));
-            renderEditor();
+    function moveEx(p, i, d) {
+        const n = i + d;
+        if (n >= 0 && n < plans[p].length) {
+            [plans[p][i], plans[p][n]] = [plans[p][n], plans[p][i]];
+            localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor();
         }
     }
 
@@ -246,28 +246,19 @@
         const p = document.getElementById('edit-plan-select').value;
         const name = document.getElementById('new-ex-name').value;
         if(name && p) {
-            plans[p].push(name);
-            localStorage.setItem('myPlans', JSON.stringify(plans));
-            document.getElementById('new-ex-name').value='';
-            renderEditor();
+            plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans));
+            document.getElementById('new-ex-name').value=''; renderEditor();
         }
     }
 
     function deleteEx(p, i) {
-        if(confirm('Übung löschen?')) {
-            plans[p].splice(i, 1);
-            localStorage.setItem('myPlans', JSON.stringify(plans));
-            renderEditor();
-        }
+        if(confirm('Übung löschen?')) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
     }
 
     function nextPlan() {
         const keys = Object.keys(plans);
-        let idx = keys.indexOf(currentPlanKey);
-        idx = (idx + 1) % keys.length;
-        currentPlanKey = keys[idx];
+        currentPlanKey = keys[(keys.indexOf(currentPlanKey) + 1) % keys.length];
         renderExercises();
-        // Piepston hier entfernt!
     }
 
     function saveStats() {
@@ -276,19 +267,14 @@
         plans[currentPlanKey].forEach(ex => {
             let exData = { date: dateStr, s1:[], s2:[], s3:[] };
             for(let i=1; i<=3; i++) {
-                const kgVal = document.getElementById(`kg-${ex}-${i}`).value;
-                const repsVal = document.getElementById(`reps-${ex}-${i}`).value;
-                exData[`s${i}`] = [kgVal, repsVal];
+                exData[`s${i}`] = [document.getElementById(`kg-${ex}-${i}`).value, document.getElementById(`reps-${ex}-${i}`).value];
             }
             localStorage.setItem('stats-'+ex, JSON.stringify(exData));
             let hist = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            hist.push(exData);
-            localStorage.setItem('hist-'+ex, JSON.stringify(hist));
+            hist.push(exData); localStorage.setItem('hist-'+ex, JSON.stringify(hist));
         });
         localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlanKey }));
-        updateLastSessionDisplay();
-        playSound('short'); // Bestätigung beim Speichern bleibt
-        alert('Training gespeichert!');
+        updateLastSessionDisplay(); playSound('short'); alert('Training gespeichert!');
     }
 
     let timerInterval;
@@ -320,8 +306,7 @@
     }
     function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
-    updateLastSessionDisplay();
-    renderExercises();
+    updateLastSessionDisplay(); renderExercises();
 </script>
 </body>
 </html>
