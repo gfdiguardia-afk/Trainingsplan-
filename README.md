@@ -3,30 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Training Tracker v3</title>
+    <title>Ultimate Training Tracker v4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 10px; display: flex; flex-direction: column; align-items: center; }
         .container { max-width: 600px; width: 100%; }
-        h1, h2 { color: var(--main); text-align: center; }
+        h1, h2 { color: var(--main); text-align: center; margin-top: 5px; }
+        .last-session { font-size: 0.9rem; color: #ffde7d; text-align: center; margin-bottom: 10px; font-weight: bold; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .exercise-block { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
         .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 10px; }
-        .set-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .set-label { width: 60px; font-size: 0.9rem; color: #888; }
-        input { background: #333; border: 1px solid #444; color: white; padding: 8px; border-radius: 5px; width: 65px; text-align: center; font-size: 1rem; }
+        
+        /* Spinner Styles */
+        .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .set-label { font-size: 0.8rem; color: #888; width: 45px; }
+        .input-group { display: flex; align-items: center; gap: 5px; background: #333; border-radius: 8px; padding: 2px; }
+        .input-group button { background: #444; width: 35px; height: 35px; padding: 0; font-size: 1.2rem; border-radius: 5px; }
+        .input-group input { background: transparent; border: none; width: 45px; color: white; text-align: center; font-size: 1rem; font-weight: bold; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
         button { cursor: pointer; background: var(--main); border: none; color: white; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
         .timer-box { position: sticky; top: 5px; z-index: 100; text-align: center; background: #222; border: 2px solid var(--main); }
         .timer-display { font-size: 2.2rem; font-weight: bold; color: #ffde7d; }
         .nav-btns { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
-        #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; overflow-y: auto; padding: 20px 10px; }
+        #chart-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; padding: 20px 10px; }
         .modal-content { background: #222; margin: auto; padding: 20px; width: 95%; max-width: 500px; border-radius: 15px; }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <div id="last-session-info" class="last-session">Lade letzte Sitzung...</div>
+
     <div class="card timer-box">
         <div id="timer-display" class="timer-display">00:00</div>
         <div style="display:flex; gap:5px; justify-content: center;">
@@ -35,7 +44,6 @@
             <button onclick="startTimer(90)">90s</button>
             <button style="background:#555" onclick="stopTimer()">Rst</button>
         </div>
-        <p id="audio-status" style="font-size: 0.7rem; color: #555; margin-top: 5px;">Audio bereit</p>
     </div>
 
     <div class="nav-btns">
@@ -58,7 +66,7 @@
                 <option value="B">Plan B</option>
             </select>
             <div id="editor-list" style="margin-top:15px;"></div>
-            <input type="text" id="new-ex-name" placeholder="Neue Übung..." style="width:60%; margin-top:10px;">
+            <input type="text" id="new-ex-name" placeholder="Neue Übung..." style="width:60%; margin-top:10px; padding:10px; background:#333; color:white; border-radius:5px; border:none;">
             <button onclick="addExercise()">Hinzufügen</button>
         </div>
     </div>
@@ -74,39 +82,47 @@
 </div>
 
 <script>
-    // --- AUDIO LOGIK (Verbessert) ---
     let audioCtx = null;
-    function initAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('audio-status').innerText = "Audio Aktiv";
-        }
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-    }
-
+    function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
     function beep(freq, duration, vol = 0.2) {
-        initAudio();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + (duration/1000));
+        initAudio(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.frequency.value = freq; gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        osc.start(); osc.stop(audioCtx.currentTime + (duration/1000));
     }
 
-    // --- DATEN & PLANS ---
     let currentPlan = 'A';
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
         'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
         'B': ["Kreuzheben", "Schulterdrücken", "Australian Pullups", "Ausfallschritte", "Liegestütze Ringe"]
     };
 
+    function updateLastSessionDisplay() {
+        const last = JSON.parse(localStorage.getItem('lastSessionLog'));
+        const info = document.getElementById('last-session-info');
+        if (last) {
+            info.innerText = `Zuletzt gespeichert: ${last.date} (Plan ${last.plan})`;
+        } else {
+            info.innerText = "Noch kein Training gespeichert";
+        }
+    }
+
     function showView(view) {
         document.getElementById('view-train').style.display = view === 'train' ? 'block' : 'none';
         document.getElementById('view-edit').style.display = view === 'edit' ? 'block' : 'none';
         if(view === 'train') renderExercises(); else renderEditor();
+    }
+
+    function changeVal(id, delta) {
+        const input = document.getElementById(id);
+        let val = parseFloat(input.value) || 0;
+        val = Math.max(0, val + delta);
+        input.value = val;
+        // Trigger sync if it's the first set kg
+        if(id.includes('kg') && id.endsWith('-1')) {
+            const exName = id.replace('kg-', '').replace('-1', '');
+            syncWeight(exName, 1);
+        }
     }
 
     function renderExercises() {
@@ -115,17 +131,25 @@
         document.getElementById('plan-title').innerText = `Training ${currentPlan}`;
         
         plans[currentPlan].forEach(ex => {
-            const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['',''], s2:['',''], s3:['',''] };
+            const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['0','0'], s2:['0','0'], s3:['0','0'] };
             let html = `<div class="exercise-block">
                 <span class="ex-title" onclick="openStats('${ex}')">${ex}</span>`;
             
             for(let i=1; i<=3; i++) {
-                const sData = data[`s${i}`] || ['',''];
+                const sData = data[`s${i}`] || ['0','0'];
                 html += `
                     <div class="set-row">
                         <span class="set-label">Satz ${i}</span>
-                        <input type="number" id="kg-${ex}-${i}" value="${sData[0]}" oninput="syncWeight('${ex}', ${i})" placeholder="kg">
-                        <input type="number" id="reps-${ex}-${i}" value="${sData[1]}" placeholder="Wdh">
+                        <div class="input-group">
+                            <button onclick="changeVal('kg-${ex}-${i}', -2.5)">-</button>
+                            <input type="number" id="kg-${ex}-${i}" value="${sData[0]}" step="0.5">
+                            <button onclick="changeVal('kg-${ex}-${i}', 2.5)">+</button>
+                        </div>
+                        <div class="input-group">
+                            <button onclick="changeVal('reps-${ex}-${i}', -1)">-</button>
+                            <input type="number" id="reps-${ex}-${i}" value="${sData[1]}">
+                            <button onclick="changeVal('reps-${ex}-${i}', 1)">+</button>
+                        </div>
                     </div>`;
             }
             list.innerHTML += html + `</div>`;
@@ -141,99 +165,71 @@
     }
 
     function saveStats() {
-        const date = new Date().toLocaleDateString('de-DE');
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+        
         plans[currentPlan].forEach(ex => {
-            let exerciseData = { date: date, s1:[], s2:[], s3:[] };
+            let exerciseData = { date: dateStr, s1:[], s2:[], s3:[] };
             for(let i=1; i<=3; i++) {
-                const kg = document.getElementById(`kg-${ex}-${i}`).value;
-                const reps = document.getElementById(`reps-${ex}-${i}`).value;
-                exerciseData[`s${i}`] = [kg, reps];
+                exerciseData[`s${i}`] = [document.getElementById(`kg-${ex}-${i}`).value, document.getElementById(`reps-${ex}-${i}`).value];
             }
             localStorage.setItem('stats-'+ex, JSON.stringify(exerciseData));
-            
             let history = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            history = history.filter(h => h.date !== date);
             history.push(exerciseData);
             localStorage.setItem('hist-'+ex, JSON.stringify(history));
         });
+
+        localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlan }));
+        updateLastSessionDisplay();
         beep(800, 200);
-        alert('Erfolgreich gespeichert!');
+        alert('Training gespeichert!');
     }
 
-    // --- CHARTS ---
     let weightChart, repsChart;
     function openStats(ex) {
         document.getElementById('chart-modal').style.display = 'block';
         document.getElementById('modal-title').innerText = ex;
         const history = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-        
-        const labels = history.map(h => h.date);
-        const avgWeights = history.map(h => {
-            const sum = (parseFloat(h.s1[0])||0) + (parseFloat(h.s2[0])||0) + (parseFloat(h.s3[0])||0);
-            return (sum / 3).toFixed(1);
-        });
-        const totalReps = history.map(h => (parseInt(h.s1[1])||0) + (parseInt(h.s2[1])||0) + (parseInt(h.s3[1])||0));
+        const labels = history.slice(-10).map(h => h.date.split(',')[1] || h.date);
+        const avgWeights = history.slice(-10).map(h => ((parseFloat(h.s1[0])||0)+(parseFloat(h.s2[0])||0)+(parseFloat(h.s3[0])||0))/3);
+        const totalReps = history.slice(-10).map(h => (parseInt(h.s1[1])||0)+(parseInt(h.s2[1])||0)+(parseInt(h.s3[1])||0));
 
         if(weightChart) weightChart.destroy();
         if(repsChart) repsChart.destroy();
-
-        const ctxW = document.getElementById('weightChart').getContext('2d');
-        weightChart = new Chart(ctxW, {
-            type: 'line',
-            data: { labels, datasets: [{ label: 'Ø Gewicht (kg)', data: avgWeights, borderColor: '#00adb5', tension: 0.2 }] },
-            options: { color: 'white', scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } } }
-        });
-
-        const ctxR = document.getElementById('repsChart').getContext('2d');
-        repsChart = new Chart(ctxR, {
-            type: 'bar',
-            data: { labels, datasets: [{ label: 'Total Wiederholungen', data: totalReps, backgroundColor: '#ffde7d' }] },
-            options: { color: 'white', scales: { y: { ticks: { color: 'white' } }, x: { ticks: { color: 'white' } } } }
-        });
+        weightChart = new Chart(document.getElementById('weightChart'), { type: 'line', data: { labels, datasets: [{ label: 'kg (Schnitt)', data: avgWeights, borderColor: '#00adb5' }] }, options: { color: 'white' } });
+        repsChart = new Chart(document.getElementById('repsChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Wdh (Total)', data: totalReps, backgroundColor: '#ffde7d' }] }, options: { color: 'white' } });
     }
 
     function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
-    // --- TIMER ---
     let timerInterval;
     function startTimer(seconds) {
-        initAudio(); 
-        clearInterval(timerInterval);
-        beep(500, 100);
+        initAudio(); clearInterval(timerInterval); beep(500, 100);
         let timeLeft = seconds;
         const display = document.getElementById('timer-display');
-        
         timerInterval = setInterval(() => {
-            let m = Math.floor(timeLeft / 60);
-            let s = timeLeft % 60;
+            let m = Math.floor(timeLeft / 60); let s = timeLeft % 60;
             display.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-            
-            if (timeLeft <= 3 && timeLeft > 0) {
-                beep(600, 200); // Pip Pip Pip
-            } else if (timeLeft === 0) {
-                clearInterval(timerInterval);
-                display.innerText = "GO!";
-                beep(900, 1000, 0.4); // PIIIIIEP
-            }
+            if (timeLeft <= 3 && timeLeft > 0) beep(600, 200);
+            if (timeLeft === 0) { clearInterval(timerInterval); display.innerText = "GO!"; beep(900, 1000, 0.4); }
             timeLeft--;
         }, 1000);
     }
-
     function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
     function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; renderExercises(); }
     
-    // --- EDITOR ---
     function renderEditor() {
         const p = document.getElementById('edit-plan-select').value;
         const list = document.getElementById('editor-list'); list.innerHTML = '';
-        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${ex}</span><button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">Löschen</button></div>`; });
+        plans[p].forEach((ex, i) => { list.innerHTML += `<div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>${ex}</span><button style="background:#ff4b2b" onclick="deleteEx('${p}', ${i})">X</button></div>`; });
     }
     function addExercise() {
         const p = document.getElementById('edit-plan-select').value; const name = document.getElementById('new-ex-name').value;
-        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); document.getElementById('new-ex-name').value=''; renderEditor(); }
+        if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
     }
     function deleteEx(p, i) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); }
 
+    updateLastSessionDisplay();
     renderExercises();
 </script>
 </body>
