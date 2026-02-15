@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v7</title>
+    <title>Training Pro Tracker v8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -95,7 +95,6 @@
 </div>
 
 <script>
-    // --- AUDIO ---
     const shortBeep = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
     const longBeep = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock_short_beep.ogg");
 
@@ -104,7 +103,6 @@
         else { longBeep.currentTime = 0; longBeep.play().catch(e => {}); }
     }
 
-    // --- DATEN ---
     let currentPlan = 'A';
     let plans = JSON.parse(localStorage.getItem('myPlans')) || {
         'A': ["Kniebeugen", "Klimmzüge", "Bankdrücken LH", "LH-Rudern", "Dips (Ringe)"],
@@ -123,16 +121,17 @@
         if(view === 'train') renderExercises(); else renderEditor();
     }
 
-    // --- SPINNER & SYNC ---
     function changeVal(id, delta) {
         const input = document.getElementById(id);
         let val = parseFloat(input.value) || 0;
         val = Math.max(0, val + delta);
         input.value = val;
         if(id.includes('kg') && id.endsWith('-1')) {
-            const exName = id.replace('kg-', '').replace('-1', '');
-            document.getElementById(`kg-${exName}-2`).value = val;
-            document.getElementById(`kg-${exName}-3`).value = val;
+            const exName = id.split('kg-')[1].split('-1')[0];
+            const val2 = document.getElementById(`kg-${exName}-2`);
+            const val3 = document.getElementById(`kg-${exName}-3`);
+            if(val2) val2.value = val;
+            if(val3) val3.value = val;
         }
     }
 
@@ -153,10 +152,10 @@
         });
     }
 
-    // --- VERSCHIEBEN & EDITOR ---
     function renderEditor() {
         const p = document.getElementById('edit-plan-select').value;
-        const list = document.getElementById('editor-list'); list.innerHTML = '';
+        const list = document.getElementById('editor-list'); 
+        list.innerHTML = '';
         plans[p].forEach((ex, i) => {
             list.innerHTML += `
                 <div class="edit-row">
@@ -187,21 +186,33 @@
         if(name) { plans[p].push(name); localStorage.setItem('myPlans', JSON.stringify(plans)); document.getElementById('new-ex-name').value=''; renderEditor(); }
     }
 
-    function deleteEx(p, i) { if(confirm('Übung löschen?')) { plans[p].splice(i, 1); localStorage.setItem('myPlans', JSON.stringify(plans)); renderEditor(); } }
+    function deleteEx(p, i) { 
+        if(confirm('Übung löschen?')) { 
+            plans[p].splice(i, 1); 
+            localStorage.setItem('myPlans', JSON.stringify(plans)); 
+            renderEditor(); 
+        } 
+    }
 
-    // --- SPEICHERN & TIMER ---
     function saveStats() {
         const now = new Date();
         const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
         plans[currentPlan].forEach(ex => {
             let exData = { date: dateStr, s1:[], s2:[], s3:[] };
-            for(let i=1; i<=3; i++) { exData[`s${i}`] = [document.getElementById(`kg-${ex}-${i}`).value, document.getElementById(`reps-${ex}-${i}`).value]; }
+            for(let i=1; i<=3; i++) { 
+                const kg = document.getElementById(`kg-${ex}-${i}`).value;
+                const reps = document.getElementById(`reps-${ex}-${i}`).value;
+                exData[`s${i}`] = [kg, reps]; 
+            }
             localStorage.setItem('stats-'+ex, JSON.stringify(exData));
             let hist = JSON.parse(localStorage.getItem('hist-'+ex)) || [];
-            hist.push(exData); localStorage.setItem('hist-'+ex, JSON.stringify(hist));
+            hist.push(exData); 
+            localStorage.setItem('hist-'+ex, JSON.stringify(hist));
         });
         localStorage.setItem('lastSessionLog', JSON.stringify({ date: dateStr, plan: currentPlan }));
-        updateLastSessionDisplay(); playSound('short'); alert('Training gespeichert!');
+        updateLastSessionDisplay(); 
+        playSound('short'); 
+        alert('Training gespeichert!');
     }
 
     let timerInterval;
@@ -217,10 +228,15 @@
             timeLeft--;
         }, 1000);
     }
-    function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
-    function togglePlan() { currentPlan = currentPlan === 'A' ? 'B' : 'A'; document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; renderExercises(); }
 
-    // --- CHARTS ---
+    function stopTimer() { clearInterval(timerInterval); document.getElementById('timer-display').innerText = "00:00"; }
+    
+    function togglePlan() { 
+        currentPlan = currentPlan === 'A' ? 'B' : 'A'; 
+        document.getElementById('toggle-plan-btn').innerText = `Zu Plan ${currentPlan==='A'?'B':'A'}`; 
+        renderExercises(); 
+    }
+
     let wChart, rChart;
     function openStats(ex) {
         document.getElementById('chart-modal').style.display = 'block';
@@ -233,6 +249,7 @@
         wChart = new Chart(document.getElementById('weightChart'), { type: 'line', data: { labels, datasets: [{ label: 'Ø kg', data: weights, borderColor: '#00adb5' }] }, options: { color: 'white' } });
         rChart = new Chart(document.getElementById('repsChart'), { type: 'bar', data: { labels, datasets: [{ label: 'Wdh Total', data: reps, backgroundColor: '#ffde7d' }] }, options: { color: 'white' } });
     }
+    
     function closeModal() { document.getElementById('chart-modal').style.display = 'none'; }
 
     updateLastSessionDisplay();
