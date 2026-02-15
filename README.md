@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Training Pro Tracker v8</title>
+    <title>Training Pro Tracker v9</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --main: #00adb5; --bg: #121212; --card: #1e1e1e; --text: #eeeeee; }
@@ -13,13 +13,14 @@
         .last-session { font-size: 0.9rem; color: #ffde7d; text-align: center; margin-bottom: 10px; font-weight: bold; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         
-        /* Trainings-Ansicht */
         .exercise-block { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
         .ex-title { font-weight: bold; font-size: 1.2rem; cursor: pointer; color: var(--main); text-decoration: underline; display: inline-block; margin-bottom: 10px; }
-        .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .set-label { font-size: 0.8rem; color: #888; width: 45px; }
         
-        /* Spinner & Inputs */
+        /* Spinner & Labels */
+        .input-wrapper { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .input-hint { font-size: 0.65rem; color: var(--main); font-weight: bold; text-transform: uppercase; }
         .input-group { display: flex; align-items: center; gap: 5px; background: #333; border-radius: 8px; padding: 2px; }
         .input-group button { background: #444; width: 40px; height: 40px; padding: 0; font-size: 1.2rem; border-radius: 5px; color: white; border: none; cursor: pointer; }
         .input-group input { background: transparent; border: none; width: 50px; color: white; text-align: center; font-size: 1rem; font-weight: bold; }
@@ -27,12 +28,10 @@
 
         button { cursor: pointer; background: var(--main); border: none; color: white; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
         
-        /* Editor-Reihenfolge */
         .edit-row { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
         .order-btns { display: flex; gap: 4px; }
         .order-btns button { padding: 8px 12px; background: #444; font-size: 1.1rem; }
 
-        /* Navigation & Timer */
         .timer-box { position: sticky; top: 5px; z-index: 100; text-align: center; background: #222; border: 2px solid var(--main); }
         .timer-display { font-size: 2.2rem; font-weight: bold; color: #ffde7d; }
         .nav-btns { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
@@ -126,6 +125,7 @@
         let val = parseFloat(input.value) || 0;
         val = Math.max(0, val + delta);
         input.value = val;
+        
         if(id.includes('kg') && id.endsWith('-1')) {
             const exName = id.split('kg-')[1].split('-1')[0];
             const val2 = document.getElementById(`kg-${exName}-2`);
@@ -142,11 +142,29 @@
         plans[currentPlan].forEach(ex => {
             const data = JSON.parse(localStorage.getItem('stats-'+ex)) || { s1:['0','0'], s2:['0','0'], s3:['0','0'] };
             let html = `<div class="exercise-block"><span class="ex-title" onclick="openStats('${ex}')">${ex}</span>`;
+            
             for(let i=1; i<=3; i++) {
                 const sData = data[`s${i}`] || ['0','0'];
-                html += `<div class="set-row"><span class="set-label">Satz ${i}</span>
-                    <div class="input-group"><button onclick="changeVal('kg-${ex}-${i}', -2.5)">-</button><input type="number" id="kg-${ex}-${i}" value="${sData[0]}" step="0.5"><button onclick="changeVal('kg-${ex}-${i}', 2.5)">+</button></div>
-                    <div class="input-group"><button onclick="changeVal('reps-${ex}-${i}', -1)">-</button><input type="number" id="reps-${ex}-${i}" value="${sData[1]}"><button onclick="changeVal('reps-${ex}-${i}', 1)">+</button></div></div>`;
+                html += `
+                <div class="set-row">
+                    <span class="set-label">Satz ${i}</span>
+                    <div class="input-wrapper">
+                        <span class="input-hint">kg</span>
+                        <div class="input-group">
+                            <button onclick="changeVal('kg-${ex}-${i}', -1)">-</button>
+                            <input type="number" id="kg-${ex}-${i}" value="${sData[0]}">
+                            <button onclick="changeVal('kg-${ex}-${i}', 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <span class="input-hint">Wdh</span>
+                        <div class="input-group">
+                            <button onclick="changeVal('reps-${ex}-${i}', -1)">-</button>
+                            <input type="number" id="reps-${ex}-${i}" value="${sData[1]}">
+                            <button onclick="changeVal('reps-${ex}-${i}', 1)">+</button>
+                        </div>
+                    </div>
+                </div>`;
             }
             list.innerHTML += html + `</div>`;
         });
